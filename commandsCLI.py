@@ -1,4 +1,4 @@
-from utils import checkConnect22, logInCSV, genTxtFile
+from functions import checkConnect22, logInCSV, genTxtFile
 from netmiko import ConnectHandler
 from snmpWalk import snmpWalkv3
 from log import authLog
@@ -19,9 +19,8 @@ shSNMP = [
 def testInven(validIPs, username, netDevice):
     # This function is to take a show run
 
-    validIPs = [validIPs]
+    # validIPs = [validIPs]
     for validDeviceIP in validIPs:
-
         try:
             validDeviceIP = validDeviceIP.strip()
             currentNetDevice = {
@@ -43,6 +42,7 @@ def testInven(validIPs, username, netDevice):
                 authLog.info(f"Connected to device {validDeviceIP}...")
 
                 sshAccess.enable()
+                authLog.info(f"Automation successfully run the command enable")
                 shHostnameOut = sshAccess.send_command(shHostname)
                 authLog.info(f"User {username} successfully found the hostname {shHostnameOut}")
                 shHostnameOut = shHostnameOut.split(' ')[1]
@@ -52,8 +52,9 @@ def testInven(validIPs, username, netDevice):
                     authLog.info(f"Device IP {validDeviceIP} is reachable on Port TCP 22.")
                     print(f"INFO: Device IP {validDeviceIP} is reachable on Port TCP 22.")
                     
-                    snmpv3User, snmpCredentials = asyncio.run(snmpWalkv3(validDeviceIP))
-                    if snmpWalkv3:
+                    snmpv3User, snmpCredentials = asyncio.run(snmpWalkv3(validDeviceIP, username))
+
+                    if snmpv3User and snmpCredentials:
                         authLog.info(f"Device: {validDeviceIP}, succesfilly passed SSH and SNMPv3 checks with SNMPv3 User: {snmpv3User}")
                         logInCSV(validDeviceIP, "Devices totally reachable", "SSH OK", "SNMPv3 OK", f"SNMPv3 User: {snmpv3User}")
                         print(f"Device: {validDeviceIP}, succesfilly passed SSH and SNMPv3 checks with SNMPv3 User: {snmpv3User}")
@@ -63,14 +64,8 @@ def testInven(validIPs, username, netDevice):
                         print(f"INFO: Automation successfully ran the below commands:\n{shHostnameOut}\n{shSNMPout}")
                         logInCSV(validDeviceIP, "Devices with SSH but SNMPv3 wrong", "SSH OK", "SNMPv3 not OK")
                         genTxtFile(validDeviceIP, username,"SNMPv3 Outputs", snmpCredentials, shSNMPout)
-
-            with open(f"Outputs/Show Run after NAC config for device {validDeviceIP}.txt", "a") as file:
-                file.write(f"User {username} connected to device IP {validDeviceIP}:\n\n")
-                file.write(f"- Below is the show run of the new configuraiton:\n")
-                authLog.info(f"Successfully saved the running config after the Dot1x change for device: {validDeviceIP}")
             
-            print(f"Outputs and files successfully created for device {validDeviceIP}.\n")
-            print("For any erros or logs please check Logs -> authLog.txt\n")
+            # Ping
 
         except Exception as error:
             print(f"ERROR: An error occurred: {error}\n", traceback.format_exc())
@@ -78,6 +73,7 @@ def testInven(validIPs, username, netDevice):
             authLog.error(traceback.format_exc())
             with open(f"Devices that failed to apply config.txt","a") as failedDevices:
                 failedDevices.write(f"User {username} connected to {validDeviceIP} got an error: {error}\n")      
+            os.system("PAUSE")
 
 def dot1xThread(validIPs, username, netDevice):
     threads = []

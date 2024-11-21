@@ -119,3 +119,39 @@ def requestLogin(validIPs):
 
 def checkYNInput(stringInput):
     return stringInput.lower() == 'y' or stringInput.lower() == 'n'
+
+def checkConnect22(ipAddress, port=22, timeout=3):
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as connectTest:
+            connectTest.settimeout(timeout)
+            connectTestOut = connectTest.connect_ex((ipAddress, port))
+            return connectTestOut == 0
+    except socket.error as error:
+        authLog.error(f"Device {ipAddress} is not reachable on port TCP 22.")
+        authLog.error(f"Error:{error}\n", traceback.format_exc())
+        return False
+
+def logInCSV(validDeviceIP, filename="", *args):
+    print(f"INFO: File created: {filename}")
+    with open(f'Outputs/{filename}.csv', mode='a', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow([validDeviceIP, *args])
+        authLog.info(f"Appended device: {validDeviceIP} to file {filename}")
+
+def genTxtFile(validDeviceIP, username, filename="", *args):
+    with open(f"Outputs/{validDeviceIP} {filename}.txt","a") as failedDevices:
+        failedDevices.write(f"User {username} connected to {validDeviceIP}\n\n")
+        for arg in args:
+            if isinstance(arg, dict):
+                for key,values in arg.items():
+                    failedDevices.write(f"{key}: ")
+                    failedDevices.write(", ".join(str(v) for v in values))
+                    failedDevices.write("\n")
+            
+            elif isinstance(arg, list):
+                for item in arg:
+                    failedDevices.write(item)
+                    failedDevices.write("\n")
+
+            elif isinstance(arg, str):
+                failedDevices.write(arg + "\n")

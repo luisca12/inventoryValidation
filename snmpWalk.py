@@ -28,69 +28,78 @@ import asyncio
 from pysnmp.hlapi.v3arch.asyncio import *
 from pysnmp.hlapi import *
 from log import authLog
+import traceback
+import os
 
 # 1.3.6.1.2.1.4.28.1 # 1.3.6.1.2.1.1
-async def snmpWalkv3(target):
+async def snmpWalkv3(validDeviceIP, username):
     """
     Perform an SNMPv3 walk.
 
-    :param target: The SNMP device IP or hostname.
-    :param user: The SNMPv3 username.
-    :param auth_key: The SNMPv3 authentication key (password).
-    :param priv_key: The SNMPv3 privacy (encryption) key.
-    :param oids: List of OIDs to walk, e.g. ['1.3.6.1.2.1.2.2.1']
-    :return: None
+    :param validDeviceIP: The SNMP device IP or hostname.
+    :return: user, snmpCredentials
     """
     oid="1.3.6.1.2.1.1.3"
     
     snmpCredentials = {
-        'user1': ['authPass1','privPass1'],
-        'user2': ['authPass2','privPass2'],
-        'user3': ['authPass3','privPass3']
+        'user1': ['authPass1','privPass1123'],
+        'user2': ['authPass2','privPass2123'],
+        'user3': ['authPass3','privPass3123']
     }
 
-    for user in snmpCredentials.keys():
-        print(f"User: {user}")
+    try:
+        for user in snmpCredentials.keys():
+            print(f"INFO: Testing SNMPv3 with user: {user} on device: {validDeviceIP}")
+            authLog.info(f"Testing SNMPv3 with user: {user} on device: {validDeviceIP}")
+            
+            authPass = snmpCredentials[user][0]
+            privPass = snmpCredentials[user][1]
         
-        authPass = snmpCredentials[user][0]
-        privPass = snmpCredentials[user][1]
-
-        print(f"authPass: {authPass}")
-        print(f"privPass: {privPass}")
-
-    
-        # Create the SNMPv3 context
-        iterator = await next_cmd(
-            SnmpEngine(),
-            UsmUserData(
-                user, 
-                authKey=authPass, 
-                privKey=privPass, 
-                authProtocol=usmHMACSHAAuthProtocol, 
-                privProtocol=usmAesCfb128Protocol),
-            await UdpTransportTarget.create((target, 161)),
-            ContextData(),
-            ObjectType(ObjectIdentity(oid))
-        )
-
-        errorIndication, errorStatus, errorIndex, varBinds = iterator
-
-        if errorIndication:
-            print(errorIndication)
-            return False
-
-        elif errorStatus:
-            print(
-                "{} at {}".format(
-                    errorStatus.prettyPrint(),
-                    errorIndex and varBinds[int(errorIndex) - 1][0] or "?",
-                )
+            # Create the SNMPv3 context
+            iterator = await next_cmd(
+                SnmpEngine(),
+                UsmUserData(
+                    user, 
+                    authKey=authPass, 
+                    privKey=privPass, 
+                    authProtocol=usmHMACSHAAuthProtocol, 
+                    privProtocol=usmAesCfb128Protocol),
+                await UdpTransportTarget.create((validDeviceIP, 161)),
+                ContextData(),
+                ObjectType(ObjectIdentity(oid))
             )
-            return False
+            authLog.info(f"Iterator created for user: {user} on device: {validDeviceIP}, iterator: {iterator}")
 
-        else:
-            for varBind in varBinds:
-                print(" = ".join([x.prettyPrint() for x in varBind]))
-            return False
+            errorIndication, errorStatus, errorIndex, varBinds = iterator
+
+            if errorIndication:
+                authLog.error(f"Device: {validDeviceIP} got an error tesing SNMPv3 user: {user}, error: {errorIndication}")
+                authLog.error(f"Possible errors: User not found, Wrong SNMP PDU digest (wrong Auth password), No SNMP response received before timeout (Wrong priv password)")
+                print(f"ERROR: {errorIndication}")
+                continue
+
+            elif errorStatus:
+                authLog.error(f"Device: {validDeviceIP} got an error tesing SNMPv3 user: {user}, error #2: {errorStatus}")
+                print(f"ERROR: {errorStatus}")
+                print(
+                    "{} at {}".format(
+                        errorStatus.prettyPrint(),
+                        errorIndex and varBinds[int(errorIndex) - 1][0] or "?",
+                    )
+                )
+                continue
+
+            else:
+                for varBind in varBinds:
+                    print(" = ".join([x.prettyPrint() for x in varBind]))
+                authLog.error(f"Device: {validDeviceIP} successfully ran the snmpwalk, output: {varBind}")
+                return user, snmpCredentials
         
-    return user, snmpCredentials
+        return None,None
+
+    except Exception as error:
+            print(f"ERROR: An error occurred: {error}\n", traceback.format_exc())
+            authLog.error(f"User {username} connected to {validDeviceIP} got an error: {error}")
+            authLog.error(traceback.format_exc())
+        
+    
