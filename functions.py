@@ -1,10 +1,12 @@
-from log import invalidIPLog, authLog
 from netmiko.exceptions import NetMikoAuthenticationException, NetMikoTimeoutException
+from log import invalidIPLog, authLog
+from ping3 import ping, verbose_ping
 
-import socket
-import getpass
-import csv
 import traceback
+import getpass
+import socket
+import csv
+import os
 
 def checkIsDigit(input_str):
     try:
@@ -20,7 +22,7 @@ def validateIP(deviceIP):
         f'{deviceIP}.mgmt.internal.das',
         f'{deviceIP}.cm.mgmt.internal.das'
     ]
-        
+  
     def checkConnect22(ipAddress, port=22, timeout=3):
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as connectTest:
@@ -51,16 +53,16 @@ def validateIP(deviceIP):
             return None
 
     if validIP(deviceIP):
-        if checkConnect22(deviceIP):
-            authLog.info(f"Device IP {deviceIP} is reachable on Port TCP 22.")
-            print(f"INFO: Device IP {deviceIP} is reachable on Port TCP 22.")
+        # if checkConnect22(deviceIP):
+        #     authLog.info(f"Device IP {deviceIP} is reachable on Port TCP 22.")
+        #     print(f"INFO: Device IP {deviceIP} is reachable on Port TCP 22.")
             return deviceIP
 
     for hostname in hostnamesResolution:
         resolvedIP = resolveHostname(hostname)
-        if resolvedIP and checkConnect22(resolvedIP):
-            authLog.info(f"Device IP {hostname} is reachable on Port TCP 22.")
-            print(f"INFO: Device IP {hostname} is reachable on Port TCP 22.")
+        if resolvedIP: # and checkConnect22(resolvedIP):
+            # authLog.info(f"Device IP {hostname} is reachable on Port TCP 22.")
+            # print(f"INFO: Device IP {hostname} is reachable on Port TCP 22.")
             return hostname    
 
     hostnameStr = ', '.join(hostnamesResolution)  
@@ -125,6 +127,8 @@ def checkConnect22(ipAddress, port=22, timeout=3):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as connectTest:
             connectTest.settimeout(timeout)
             connectTestOut = connectTest.connect_ex((ipAddress, port))
+            authLog.info(f"Device IP {ipAddress} is reachable on Port TCP 22.")
+            print(f"INFO: Device IP {ipAddress} is reachable on Port TCP 22.")
             return connectTestOut == 0
     except socket.error as error:
         authLog.error(f"Device {ipAddress} is not reachable on port TCP 22.")
@@ -155,3 +159,22 @@ def genTxtFile(validDeviceIP, username, filename="", *args):
 
             elif isinstance(arg, str):
                 failedDevices.write(arg + "\n")
+
+def pingDevice(validDeviceIP):
+    authLog.info(f"Initiating ping to device: {validDeviceIP}")
+    try:
+        pingOut = ping(validDeviceIP)
+        authLog.info(f"Ping to device: {validDeviceIP} returned: {pingOut}")
+
+        if pingOut is False:
+            print(f"ERROR: Ping to {validDeviceIP} failed.")
+            authLog.error(f"INFO: Ping to {validDeviceIP} failed.")
+            return False
+        else:
+            print(f"INFO: Ping to {validDeviceIP} was successful")
+            authLog.info(f"Ping to {validDeviceIP} was successful")
+            verbose_ping(validDeviceIP, count=4)
+            return True
+    except Exception as error:
+        print(f"ERROR: An error occurred during the ping test: {error}\n", traceback.format_exc())
+        authLog.error(traceback.format_exc())
